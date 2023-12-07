@@ -17,118 +17,142 @@
 	require_once 'echo_add.php';
 	require_once 'echo_bookmark.php';
 	require_once 'echo_edit.php';
+	require_once 'sanitize.php';
 	
 	$pdo = new PDO($attr, $user, $pass, $opts);
 	
 	//print_r($_POST);
+	//print_r($GLOBALS);
 	
-	$warning = 'Please do not leave fields with * empty :(';
-	$find = $_POST['find'];
+	$find = str_replace("'","",sanitize($_POST['find']));
+	$status = $_POST['status'];
+	$sort = $_POST['sort'];
 	
 	//'add book' form processing
 	if (isset($_POST['add'])){
 		if ($_POST['add'] == 'Click to add'){
 		
-			if ($_POST['author'] != NULL &&
-			    $_POST['title'] != NULL &&
-			    $_POST['pages'] != NULL) {
-			    
-				$author = $pdo->quote($_POST['author']);
-				$title = $pdo->quote($_POST['title']);
-				$pages = $pdo->quote($_POST['pages']);
-				$image = $pdo->quote($_POST['image']);
-				$sql = "INSERT INTO books (author, title, pages, image) VALUES ($author, $title, $pages, $image)";
-				$pdo->query($sql);
-			}
+			$author = sanitize($_POST['author']);
+			$title = sanitize($_POST['title']);
+			$pages = sanitize($_POST['pages']);
+			$rating = sanitize($_POST['rating']);
+			$image = sanitize($_POST['image']);
 			
-			else echo_add($warning);
+			$sql = "INSERT INTO books (author, title, pages, image, rating) VALUES ($author, $title, $pages, $image, $rating)";
+			$pdo->query($sql);
+
 		}
-		
-		else echo_add('');
+		else echo_add();
 	}
 	
 	//'bookmark' form processing
 	if (isset($_POST['bookmark'])){
-		$id = $_POST['id'];
+		$id = sanitize($_POST['id']);
 		$sql = "SELECT * FROM books WHERE id=$id";
 		$book = ($pdo->query($sql))->fetch();
 		
 		if ($_POST['bookmark'] == 'Put a bookmark'){
-			
-			if ($_POST['bookmark'] != NULL &&
-			    $_POST['last_view'] != NULL) {
 				
-				$bookmark = $pdo->quote($_POST['bookmark']);
-				$last_view = $pdo->quote($_POST['last_view']);
-				$sql = "UPDATE books SET bookmark=$bookmark, last_view=$last_view WHERE id=$id";
-				$pdo->query($sql);
-			}
-			
-			else echo_bookmark($warning, $book);
+			$page_bookmark = sanitize($_POST['page_bookmark']);
+			$last_view = sanitize($_POST['last_view']);
+			$sql = "UPDATE books SET bookmark=$page_bookmark, last_view=$last_view WHERE id=$id";
+			$pdo->query($sql);
+
 		}
-		
-		else echo_bookmark('', $book);
+		else echo_bookmark($book);
 	}
 	
 	//'edit' form processing
 	if (isset($_POST['edit'])){
-		$id = $_POST['id'];
+		$id = sanitize($_POST['id']);
 		$sql = "SELECT * FROM books WHERE id=$id";
 		$book = ($pdo->query($sql))->fetch();
 		
 		if ($_POST['edit'] == 'Click to edit'){
-			
-			if ($_POST['author'] != NULL &&
-			    $_POST['title'] != NULL &&
-			    $_POST['pages'] != NULL) {
 				
-				$author = $pdo->quote($_POST['author']);
-				$title = $pdo->quote($_POST['title']);
-				$pages = $pdo->quote($_POST['pages']);
-				$image = $pdo->quote($_POST['image']);
-				$sql = "UPDATE books SET author=$author, title=$title, pages=$pages, image=$image WHERE id=$id";
-				$pdo->query($sql);
-			}
+			$author = sanitize($_POST['author']);
+			$title = sanitize($_POST['title']);
+			$pages = sanitize($_POST['pages']);
+			$rating = sanitize($_POST['rating']);
+			$image = sanitize($_POST['image']);
 			
-			else echo_edit($warning, $book);
+			$sql = "UPDATE books SET author=$author, title=$title, pages=$pages, image=$image, rating=$rating WHERE id=$id";
+			$pdo->query($sql);
 		}
-		
-		else echo_edit('', $book);
+		else echo_edit($book);
 	}
 	
 	//delete button processing
 	if (isset($_POST['delete'])){
-		$id = $pdo->quote($_POST['id']);
+		$id = sanitize($_POST['id']);
 		$sql = "DELETE FROM books WHERE id=$id";
 		$pdo->query($sql);
 	}
 	
-	//variables for searching books
-	$order = 'id'; $where = ''; $like = '';
-	
 	//search button processing
 	//and also radio buttons
-	if (isset($_POST['show'])){
-		switch ($_POST['show']){
-					
-			case 'Finished books':
-			$where = 'WHERE pages = bookmark';
-			break;
-					
-			case 'Books in progress':
-			$where = 'WHERE pages <> bookmark AND bookmark <> 0';
-			break;
-					
-			case 'Planned books':
-			$where = 'WHERE bookmark = 0';
-			break;
-		}
+	switch ($status){
+		
+		case 'Finished books':
+		global $where, $finished_books;
+		$where = 'WHERE pages = bookmark';
+		$finished_books = 'checked';
+		break;
+		
+		case 'Books in progress':
+		global $where, $books_in_progress;
+		$where = 'WHERE pages <> bookmark AND bookmark <> 0';
+		$books_in_progress = 'checked';
+		break;
+			
+		case 'Planned books':
+		global $where, $planned_books;
+		$where = 'WHERE bookmark = 0';
+		$planned_books = 'checked';
+		break;
+		
+		default:
+		global $where, $all_books;
+		$where = '';
+		$all_books = 'checked';
+	}
+	
+	switch ($sort){
+		
+		case 'title':
+		global $order, $title_sort;
+		$order = 'title';
+		$title_sort = 'checked';
+		break;
+		
+		case 'rating':
+		global $order, $rating_sort;
+		$order = 'rating DESC';
+		$rating_sort = 'checked';
+		break;
+			
+		case 'progress':
+		global $order, $progress_sort;
+		$order = 'progress DESC';
+		$progress_sort = 'checked';
+		break;
+		
+		default:
+		global $order, $last_view_sort;
+		$order = 'last_view';
+		$last_view_sort = 'checked';
 	}
 	
 	//search sql commad depends on 'WHERE' in radio buttons
-	if ($_POST['find'] != NULL){
-		if ($where == '') $like = "WHERE title LIKE '%$find%' OR author LIKE '%$find%'";
-		else $like = " AND (title LIKE '%$find%' OR author LIKE '%$find%')";
+	if ($find != NULL){
+		if ($where == ''){
+			global $like;
+			$like = "WHERE title LIKE '%$find%' OR author LIKE '%$find%'";
+		}
+		else {
+			global $like;
+			$like = " AND (title LIKE '%$find%' OR author LIKE '%$find%')";
+		}
 	}
 	
 
@@ -136,22 +160,25 @@
 	//echo $sql;
 	$result = $pdo->query($sql);
 	
-	//'library' form processing
+	//'books' form processing
 	echo <<< _END
-	<form action="" method="post">
-	<h2><b>📚 Books</b></h2>
-	<input type="search" name="find" placeholder="🔍 Write title or author" value="$find">
-	<input type="submit" value="Search">
-	<input type="submit" name="add" value="➕"><br><br>
-	<b><big>Filtered by: </big></b>
-	<input type="radio" name="show" value="All books">
-	<label>All books</label>
-	<input type="radio" name="show" value="Finished books">
-	<label>Finished books</label>
-	<input type="radio" name="show" value="Books in progress">
-	<label>Books in progress</label>
-	<input type="radio" name="show" value="Planned books">
-	<label>Planned books</label>
+	<form action="" method="post" id="books">
+		<h2><b>📚 Books</b></h2>
+			<input type="search" name="find" placeholder="🔍 Write title or author" value="$find">
+			<input type="submit" value="Search">
+			<input type="submit" name="add" value="➕"><br><br>
+			
+		<b><big>Status:</big></b>&nbsp
+			<label><input type="radio" name="status" value="All books" $all_books> All books</label>
+			<label><input type="radio" name="status" value="Finished books" $finished_books> Finished books</label>
+			<label><input type="radio" name="status" value="Books in progress" $books_in_progress> Books in progress</label>
+			<label><input type="radio" name="status" value="Planned books" $planned_books> Planned books</label><br>
+			
+		<b><big>Sort by:</big></b>
+			<label><input type="radio" name="sort" value="last_view" $last_view_sort> Last view</label>
+			<label><input type="radio" name="sort" value="title" $title_sort> Title</label>
+			<label><input type="radio" name="sort" value="rating" $rating_sort> Rating</label>
+			<label><input type="radio" name="sort" value="progress" $progress_sort> Progress</label><br>
 	</form>
 	_END;
 	
@@ -163,17 +190,21 @@
 		$pages = $book['pages'];
 		$bookmark = $book['bookmark'];
 		$last_view = $book['last_view'];
-		$image = $book['image'];
+		$rating = "<big><big>" . str_repeat("★",$book['rating']) . str_repeat("☆",5 - $book['rating']) . "</big></big>";
+		
+		//default image or not
+		if ($book['image'] != '') $image = $book['image'];
+		else $image = 'https://dl.acm.org/specs/products/acm/releasedAssets/images/cover-default--book-eb4a10bc8384c82eedc8ec474d7dd09a.svg';
 		
 		//form for record 
 		echo <<< _END
 		<form action="" method="post">
 		<pre>
 		<img src="$image" width = "150px">
+		  <progress max="$pages" value="$bookmark"></progress>
+		<big>Rating:$rating</big>
 		<big>Title: $title</big>
 		<big>Author: $author</big>
-		<big>Pages: $pages</big>
-		<big>Bookmark: $bookmark</big>
 		<big>Last view: $last_view</big>
 		</pre>
 		<input type="submit" name="bookmark" value="Bookmark">
@@ -182,6 +213,8 @@
 		
 		<input type="hidden" name="id" value="$id">
 		<input type="hidden" name="find" value="$find">
+		<input type="hidden" name="status" value="$status">
+		<input type="hidden" name="sort" value="$sort">
 		</form>
 		_END;
 	}
